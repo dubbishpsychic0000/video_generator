@@ -1,1 +1,80 @@
+name: YouTube Shorts Bot
 
+on:
+  schedule:
+    # Run daily at 10:00 AM UTC
+    - cron: '0 10 * * *'
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      topic:
+        description: 'Video topic (optional)'
+        required: false
+        type: string
+
+jobs:
+  create-and-upload-video:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Create directories
+      run: |
+        mkdir -p temp
+        mkdir -p credentials
+    
+    - name: Set up environment variables
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+        YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      run: |
+        echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
+        echo "PEXELS_API_KEY=${PEXELS_API_KEY}" >> .env
+        echo "YOUTUBE_CLIENT_ID=${YOUTUBE_CLIENT_ID}" >> .env
+        echo "YOUTUBE_CLIENT_SECRET=${YOUTUBE_CLIENT_SECRET}" >> .env
+    
+    - name: Setup YouTube credentials
+      run: |
+        echo '${{ secrets.YOUTUBE_CLIENT_SECRETS }}' > credentials/client_secrets.json
+        echo '${{ secrets.YOUTUBE_TOKEN_PICKLE }}' | base64 -d > credentials/token.pickle
+    
+    - name: Run video generation
+      run: |
+        if [ -n "${{ github.event.inputs.topic }}" ]; then
+          python main.py --topic "${{ github.event.inputs.topic }}"
+        else
+          python main.py
+        fi
+    
+    - name: Upload artifacts (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: debug-files
+        path: |
+          temp/
+          *.log
+        retention-days: 7
+
+    - name: Clean up
+      if: always()
+      run: |
+        rm -rf temp/
+        rm -f .env
