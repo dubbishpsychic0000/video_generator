@@ -53,3 +53,39 @@ def fetch_pexels_image(topic: str, output_path: str) -> str:
 def create_default_image(topic: str, output_path: str) -> str:
     """Create a simple default background image"""
     from PIL import Image, ImageDraw, ImageFont
+    
+    # Create image with video dimensions
+    img = Image.new('RGB', (config.VIDEO_WIDTH, config.VIDEO_HEIGHT), color='#1a1a2e')
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        # Try to use a better font
+        font = ImageFont.truetype("arial.ttf", 80)
+    except:
+        font = ImageFont.load_default()
+    
+    # Add topic text
+    text = topic.upper()
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    
+    x = (config.VIDEO_WIDTH - text_width) // 2
+    y = (config.VIDEO_HEIGHT - text_height) // 2
+    
+    draw.text((x, y), text, fill='white', font=font)
+    
+    img.save(output_path)
+    return output_path
+
+def resize_image_for_video(image_path: str):
+    """Resize image to fit video dimensions"""
+    with Image.open(image_path) as img:
+        # Resize to video dimensions while maintaining aspect ratio
+        img = img.resize((config.VIDEO_WIDTH, config.VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+        img.save(image_path)
+
+if __name__ == "__main__":
+    # Test image generation
+    test_image = get_background_image("engineering", "test_image.jpg")
+    print(f"Image created: {test_image}")
