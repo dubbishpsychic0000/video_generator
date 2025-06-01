@@ -1,5 +1,10 @@
+# New Google Gen AI SDK (recommended)
+google-genai>=0.3.0
 
+# Legacy SDK (backup compatibility)
 google-generativeai>=0.3.0
+
+# Other dependencies
 gtts>=2.3.0
 pyttsx3>=2.90
 moviepy>=1.0.3
@@ -10,4 +15,3 @@ google-api-python-client>=2.0.0
 google-auth-httplib2>=0.1.0
 google-auth-oauthlib>=0.5.0
 schedule>=1.2.0
-
