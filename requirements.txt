@@ -1,17 +1,24 @@
-# New Google Gen AI SDK (recommended)
-google-genai>=0.3.0
-
-# Legacy SDK (backup compatibility)
+# Core dependencies
 google-generativeai>=0.3.0
-
-# Other dependencies
 gtts>=2.3.0
-pyttsx3>=2.90
-moviepy>=1.0.3
-Pillow>=9.0.0
 requests>=2.28.0
 python-dotenv>=0.19.0
+Pillow>=9.0.0
+
+# Video processing dependencies
+imageio>=2.19.0
+imageio-ffmpeg>=0.4.7
+moviepy==1.0.3
+
+# YouTube API dependencies
 google-api-python-client>=2.0.0
 google-auth-httplib2>=0.1.0
 google-auth-oauthlib>=0.5.0
+
+# Optional dependencies
+pyttsx3>=2.90
 schedule>=1.2.0
+
+# System compatibility
+setuptools>=60.0.0
+wheel>=0.37.0
