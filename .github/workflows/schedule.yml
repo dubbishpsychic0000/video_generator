@@ -1,35 +1,129 @@
-# Update action versions
-- name: Set up Python
-  uses: actions/setup-python@v5  # Updated version
-  with:
-    python-version: '3.11'  # Use newer Python
+name: YouTube Shorts Bot - Scheduled Run
 
-# Fix ImageMagick setup
-- name: Install system dependencies
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y ffmpeg imagemagick
-    # Better ImageMagick config
-    sudo mv /etc/ImageMagick-6/policy.xml /etc/ImageMagick-6/policy.xml.bak
-    sudo tee /etc/ImageMagick-6/policy.xml > /dev/null <<EOF
-    <?xml version="1.0" encoding="UTF-8"?>
-    <!DOCTYPE policymap [
-      <!ELEMENT policymap (policy)+>
-      <!ELEMENT policy (#PCDATA)>
-      <!ATTLIST policy domain (delegate|coder|filter|path|resource) #IMPLIED>
-      <!ATTLIST policy name CDATA #IMPLIED>
-      <!ATTLIST policy pattern CDATA #IMPLIED>
-      <!ATTLIST policy rights CDATA #IMPLIED>
-      <!ATTLIST policy stealth (True|False) "False">
-      <!ATTLIST policy value CDATA #IMPLIED>
-    ]>
-    <policymap>
-      <policy domain="resource" name="memory" value="256MiB"/>
-      <policy domain="resource" name="map" value="512MiB"/>
-      <policy domain="resource" name="width" value="8KP"/>
-      <policy domain="resource" name="height" value="8KP"/>
-      <policy domain="resource" name="area" value="16KP"/>
-      <policy domain="resource" name="disk" value="1GiB"/>
-      <policy domain="coder" rights="read|write" pattern="*" />
-    </policymap>
-    EOF
+on:
+  schedule:
+    # Run daily at 10:00 AM UTC
+    - cron: '0 10 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  generate-video:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg imagemagick
+        
+        # Fix ImageMagick policy for video processing
+        sudo mv /etc/ImageMagick-6/policy.xml /etc/ImageMagick-6/policy.xml.bak
+        sudo tee /etc/ImageMagick-6/policy.xml > /dev/null <<EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE policymap [
+          <!ELEMENT policymap (policy)+>
+          <!ELEMENT policy (#PCDATA)>
+          <!ATTLIST policy domain (delegate|coder|filter|path|resource) #IMPLIED>
+          <!ATTLIST policy name CDATA #IMPLIED>
+          <!ATTLIST policy pattern CDATA #IMPLIED>
+          <!ATTLIST policy rights CDATA #IMPLIED>
+          <!ATTLIST policy stealth (True|False) "False">
+          <!ATTLIST policy value CDATA #IMPLIED>
+        ]>
+        <policymap>
+          <policy domain="resource" name="memory" value="512MiB"/>
+          <policy domain="resource" name="map" value="1GiB"/>
+          <policy domain="resource" name="width" value="16KP"/>
+          <policy domain="resource" name="height" value="16KP"/>
+          <policy domain="resource" name="area" value="128KP"/>
+          <policy domain="resource" name="disk" value="2GiB"/>
+          <policy domain="coder" rights="read|write" pattern="*" />
+          <policy domain="path" rights="read|write" pattern="@*"/>
+        </policymap>
+        EOF
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt
+        
+    - name: Create required directories
+      run: |
+        mkdir -p temp credentials output
+        
+    - name: Set up environment variables
+      run: |
+        echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+        echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
+        echo "YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" >> .env
+        echo "YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" >> .env
+        
+    - name: Set up YouTube credentials
+      if: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+      run: |
+        echo '${{ secrets.YOUTUBE_CLIENT_SECRETS }}' > credentials/client_secrets.json
+        
+    - name: Set up YouTube token
+      if: ${{ secrets.YOUTUBE_TOKEN }}
+      run: |
+        echo '${{ secrets.YOUTUBE_TOKEN }}' | base64 -d > credentials/token.pickle
+        
+    - name: Verify setup
+      run: |
+        python -c "
+        import sys
+        print('Python version:', sys.version)
+        
+        # Check if required modules can be imported
+        modules = ['google.generativeai', 'gtts', 'moviepy', 'PIL', 'requests']
+        for module in modules:
+            try:
+                __import__(module)
+                print(f'✅ {module} imported successfully')
+            except ImportError as e:
+                print(f'❌ {module} import failed: {e}')
+        
+        # Check environment variables
+        import os
+        if os.getenv('GEMINI_API_KEY'):
+            print('✅ GEMINI_API_KEY found')
+        else:
+            print('❌ GEMINI_API_KEY missing')
+        "
+        
+    - name: Generate video
+      run: |
+        python main.py --topic "Amazing engineering facts that will blow your mind"
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: generated-video-${{ github.run_number }}
+        path: |
+          temp/*.mp4
+          temp/*.mp3
+          temp/*.jpg
+        retention-days: 7
+        
+    - name: Clean up
+      if: always()
+      run: |
+        # Clean up temporary files but keep for artifacts
+        ls -la temp/ || echo "No temp directory found"
